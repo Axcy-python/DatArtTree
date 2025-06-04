@@ -1,63 +1,42 @@
 import customtkinter as ctk
-import time
-from PIL import Image, ImageTk
+from PIL import Image
+
+class AppCore(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.__settings()
+        self.__center_win()
+        self.show()
 
 
-class AnimatedApp:
-    def __init__(self, root):
-        self.root: ctk.CTk = root
-        self.root.title("Delta Time Animation")
+    def show(self):
+        bg_loadscreen: ctk.CTkImage = ctk.CTkImage()
 
-        img = Image.open("/Users/axcy/Desktop/PythonProjects/DatArtTree CTkinter App/Resources/icons/hello.png")
-        img = img.convert("RGBA")
+    
+    def __settings(self):
+        self.title(f"DatArtTree")
+        self.overrideredirect(True)
+        self.geometry("600x400")
+        self.resizable(False, False)
 
-        # Перетворення в зображення Tkinter
-        self.tk_image = ctk.CTkImage(light_image=img, dark_image=img, size=(50, 50))
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        # Створення кнопки
-        self.button = ctk.CTkButton(self.root, text="Animate Me", command=self.start_animation, image=self.tk_image)
-        self.button.pack(pady=20)
 
-        # Параметри анімації
-        self.x = 50  # Початкове положення
-        self.speed = 50  # Пікселі на секунду
-        self.last_time = time.time()  # Зберігаємо час останнього кадру
+    def on_close(self):
+        print("Програму закрито!")
+        self.destroy()
 
-        # Флаг, чи анімація повинна йти
-        self.animating = False
+    
+    def __center_win(self):
+        self.update_idletasks()
+        width: int = self.winfo_width()
+        height: int = self.winfo_height()
 
-    def start_animation(self):
-        """Запускає анімацію"""
-        self.animating = True
-        self.last_time = time.time()  # Оновлюємо час старту анімації
-        self.animate()
+        pos_x: int = (self.winfo_screenwidth() - width) // 2
+        pos_y: int = (self.winfo_screenheight() - height) // 2
+        self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
 
-    def animate(self):
-        """Анімація з дельта-часом"""
-        if self.animating:
-            # Поточний час
-            current_time = time.time()
-
-            # Різниця між поточним часом і часом останнього кадру
-            delta_time = current_time - self.last_time
-
-            # Оновлення положення об'єкта за допомогою delta_time
-            self.x += self.speed * delta_time  # Множимо швидкість на час, щоб компенсувати FPS
-
-            # Оновлюємо позицію кнопки
-            self.button.place(x=self.x, y=100)
-
-            # Оновлюємо час останнього кадру
-            self.last_time = current_time
-
-            # Якщо кнопка вийшла за межі екрану, зупиняємо анімацію
-            if self.x > self.root.winfo_width():
-                self.animating = False
-
-            # Повторюємо анімацію через короткий інтервал
-            self.root.after(1, self.animate)  # 16 мс = 60 FPS
 
 if __name__ == "__main__":
-    root = ctk.CTk()
-    app = AnimatedApp(root)
-    root.mainloop()
+    app = AppCore()
+    app.mainloop()
