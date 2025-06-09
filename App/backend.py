@@ -10,6 +10,11 @@ import pandas as pd
 from typing import Literal, Optional, Union
 import matplotlib.pyplot as plt
 import seaborn as sns
+import openai
+from cryptography.fernet import Fernet
+import json
+import threading
+import time
                 
 
 class GoogleAPI:
@@ -205,11 +210,9 @@ class Data:
         return self.__df.to_dict(orient="records")
 
 
-class DataAnalizer:
-    """API ChatGPT або робота з API локального ШІ для аналізу"""
-
+class DataPlot:
     def __init__(self, dataframe: pd.DataFrame):
-        self._df: pd.DataFrame = dataframe
+        self.__df: pd.DataFrame = dataframe
 
 
     def __to_list(self, value):
@@ -245,7 +248,11 @@ class DataAnalizer:
 
     def __aggregate(self, group_by, value_col: str, agg_func: str) -> pd.DataFrame:
         group_by = self.__to_list(group_by)
-        return self._df.groupby(group_by)[value_col].agg(agg_func)
+        return self.__df.groupby(group_by)[value_col].agg(agg_func)
+    
+
+    def clear(self) -> None:
+        self.__df = None
 
 
     def bar_chart_plot(self, value_col: str, group_by=Union[str, list, None], agg_func: Literal['mean', 'sum', 'max', 'min', 'median', 'all'] = 'mean'):
@@ -393,41 +400,74 @@ class DataAnalizer:
 
 
 
-# gogle = GoogleAPI()
-# file_io_web = gogle.get_sheets_data('11aIKsiTHjRot2QdPb_ei__Ytjvn9jOXykD_cR9j1uVI')
-# data_ = Data(data_from_list=file_io_web)
+class AIAgent:
+    SECRET_PATH: str = ".venv/.secrets.json"
+    KEY_PATH: str = ".venv/.secret.key"
+    GPT_MODELS: tuple = ("gpt-3.5-turbo", "gpt-4o", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo-0125")
+
+    def __init__(self):
+        self.openai_model = "gpt-3.5-turbo"
+        self.token: str = None
+
+        self.fernet = self.__load_or_create_key()
+        self.__load_tokens()
+
+        if self.token:
+            openai.api_key = self.token
 
 
-data = [
-    {"Країна": "Україна", "Місто": "Київ", "Температура (°C)": 22, "Вологість (%)": 60, "Стан": "Сонячно"},
-    {"Країна": "Україна", "Місто": "Київ", "Температура (°C)": 30, "Вологість (%)": 60, "Стан": "Сонячно"},
-    {"Країна": "Україна", "Місто": "Київ", "Температура (°C)": 11, "Вологість (%)": 60, "Стан": "Сонячно"},
-    {"Країна": "Україна", "Місто": "Київ", "Температура (°C)": 11, "Вологість (%)": 60, "Стан": "Сонячно"},
-    {"Країна": "Україна", "Місто": "Київ", "Температура (°C)": 15, "Вологість (%)": 60, "Стан": "Сонячно"},
-    {"Країна": "Польща", "Місто": "Варшава", "Температура (°C)": 18, "Вологість (%)": 70, "Стан": "Хмарно"},
-    {"Країна": "Німеччина", "Місто": "Берлін", "Температура (°C)": 20, "Вологість (%)": 65, "Стан": "Дощ"},
-    {"Країна": "Франція", "Місто": "Париж", "Температура (°C)": 24, "Вологість (%)": 55, "Стан": "Сонячно"},
-    {"Країна": "Італія", "Місто": "Рим", "Температура (°C)": 28, "Вологість (%)": 50, "Стан": "Сонячно"},
-    {"Країна": "Іспанія", "Місто": "Мадрид", "Температура (°C)": 30, "Вологість (%)": 40, "Стан": "Сонячно"},
-    {"Країна": "Велика Британія", "Місто": "Лондон", "Температура (°C)": 17, "Вологість (%)": 80, "Стан": "Хмарно"},
-    {"Країна": "Норвегія", "Місто": "Осло", "Температура (°C)": 12, "Вологість (%)": 75, "Стан": "Дощ"},
-    {"Країна": "Швеція", "Місто": "Стокгольм", "Температура (°C)": 14, "Вологість (%)": 78, "Стан": "Хмарно"},
-    {"Країна": "Фінляндія", "Місто": "Гельсінкі", "Температура (°C)": 10, "Вологість (%)": 85, "Стан": "Дощ"}
-]
+    def __load_or_create_key(self) -> Fernet:
+        os.makedirs(".venv", exist_ok=True)
+        if not os.path.exists(self.KEY_PATH):
+            key = Fernet.generate_key()
+            with open(self.KEY_PATH, "wb") as f:
+                f.write(key)
+        else:
+            with open(self.KEY_PATH, "rb") as f:
+                key = f.read()
+        return Fernet(key)
 
-df_weather = pd.DataFrame(data)
 
-analyze = DataAnalizer(df_weather)
-# analyze.bar_chart_plot(value_col='Температура (°C)', group_by=['Країна'], agg_func='sum')
+    def __load_tokens(self):
+        if os.path.exists(self.SECRET_PATH):
+            with open(self.SECRET_PATH, "r") as f:
+                data = json.load(f)
+            if "openai" in data:
+                self.token = self.fernet.decrypt(data["openai"].encode()).decode()
+                openai.api_key = self.token
 
-# analyze.box_plot(value_col='Температура (°C)', group_by='Країна')
 
-analyze.heatmap_plot(x_col='Країна', y_col='Місто', value_col='Температура (°C)', agg_func='sum')
+    def keycrypt(self, openai_key: str = None):
+        data = {}
+        if openai_key:
+            self.token = openai_key
+            openai.api_key = openai_key
+            data["openai"] = self.fernet.encrypt(openai_key.encode()).decode()
+    
+        with open(self.SECRET_PATH, "w") as f:
+            json.dump(data, f)
 
-analyze.histogram_plot(value_col='Температура (°C)', group_by=['Країна'], agg_func='sum')
 
-analyze.line_chart_plot(value_col='Температура (°C)', group_by=['Країна'], agg_func='sum')
+    def get_analyze(self, data: Union[list, dict, tuple, pd.DataFrame]) -> str:
+        if self.token:
+            try:
+                response = openai.ChatCompletion.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "Ти помічник. Аналізуй дані стисло та зрозуміло."},
+                        {"role": "user", "content": "Проаналізуй ці дані: " + str(data)}
+                    ]
+                )
+                return response['choices'][0]['message']['content']
+            except Exception as e:
+                return f"[GPT] Помилка API: {str(e)}"
+            
 
-analyze.pie_chart_plot(value_col='Температура (°C)', group_by=['Країна'], agg_func='sum', mode='combined')
+    def run_analysis_thread(self, data):
+        threading.Thread(target=self.analyze_and_display, args=(data,), daemon=True).start()
 
-analyze.scatter_plot(x_col='Температура (°C)', y_col='Вологість (%)', group_by='Країна', agg_func='sum')
+
+    def analyze_and_display(self, data, output_widget):
+        result = self.get_analyze(data)
+        self.output_widget.after(0, lambda: self.output_widget.insert("end", result + "\n"))
+    
