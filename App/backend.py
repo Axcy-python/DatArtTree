@@ -469,5 +469,5 @@ class AIAgent:
 
     def analyze_and_display(self, data, output_widget):
         result = self.get_analyze(data)
-        self.output_widget.after(0, lambda: self.output_widget.insert("end", result + "\n"))
+        output_widget.after(0, lambda: output_widget.insert("end", result + "\n"))
     
